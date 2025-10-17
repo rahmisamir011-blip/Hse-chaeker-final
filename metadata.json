@@ -1,0 +1,7 @@
+{
+  "name": "HSE Compliance Checker",
+  "description": "An AI-powered app to verify PPE compliance for pharmaceutical factory workers, providing instant visual and text feedback in Arabic.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
