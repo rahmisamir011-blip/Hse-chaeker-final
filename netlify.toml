@@ -1,0 +1,20 @@
+# This is the configuration file for Netlify
+
+# Build settings for your React + Vite project
+[build]
+  # The command to build your site's static files
+  command = "npm run build"
+  
+  # The folder that contains the final built website (for Vite, this is 'dist')
+  publish = "dist"
+  
+  # The folder where your secure backend function is located
+  functions = "netlify/functions"
+
+# This rule creates the user-friendly '/api/*' URL.
+# It tells Netlify to forward any request starting with '/api/'
+# to your secure backend function in the 'netlify/functions' folder.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
