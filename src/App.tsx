@@ -1,39 +1,121 @@
-import React, { useState, useRef } from 'react';
-import { analyzeImageForPpe } from './services/geminiService';
-import { AnalysisResult, PpeFinding, PpeTypeArabic } from './types';
-import { ppeDetails } from './ppeDetails';
-import { CameraIcon, CheckCircleIcon, SpinnerIcon, XCircleIcon, ImageIcon } from './components/icons';
+// src/App.tsx
 
-const App: React.FC = () => {
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+import { useState, useRef, useEffect } from 'react';
+import './App.css'; // Assuming you have some basic styles
 
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
+function App() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
-  const resetState = () => {
-    setImageFile(null);
-    setImageUrl(null);
-    setAnalysisResult(null);
-    setIsLoading(false);
-    setError(null);
-    if (galleryInputRef.current) galleryInputRef.current.value = '';
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
+  // Function to start the webcam
+  const startCamera = async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error("Error accessing the webcam: ", error);
+        setAnalysisResult("Could not access the webcam. Please grant permission.");
+      }
+    } else {
+      setAnalysisResult("Your browser does not support camera access.");
+    }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      resetState();
-      setImageFile(file);
-      const url = URL.createObjectURL(file);
-      setImageUrl(url);
-      handleAnalyze(file);
+  // Start the camera when the component mounts
+  useEffect(() => {
+    startCamera();
+  },);
+
+  // Function to capture image and send for analysis
+  const handleCaptureAndAnalyze = () => {
+    if (!videoRef.current ||!canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    if (!context) return;
+
+    // Set canvas size to match video stream
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw the current video frame onto the canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Convert canvas to a Blob, then to a File
+    canvas.toBlob(async (blob) => {
+      if (blob) {
+        const imageFile = new File([blob], "capture.jpeg", { type: "image/jpeg" });
+        await analyzeImage(imageFile);
+      }
+    }, 'image/jpeg');
+  };
+
+  // New function to send the image to YOUR secure backend
+  const analyzeImage = async (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file); // The key 'image' must match the backend function
+
+    setIsAnalyzing(true);
+    setAnalysisResult('Analyzing... Please wait.');
+
+    try {
+      // *** KEY CHANGE ***
+      // Call your own secure Netlify Function endpoint
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error |
+
+| `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Format and display the results
+      let resultText = '✅ Analysis Complete:\n\n';
+      resultText += `- Charlotte: ${data.charlotte? 'Detected' : 'Not Detected'}\n`;
+      resultText += `- Bavette: ${data.bavette? 'Detected' : 'Not Detected'}\n`;
+      resultText += `- Full Suit: ${data.suit? 'Detected' : 'Not Detected'}\n`;
+      
+      setAnalysisResult(resultText);
+
+    } catch (error: any) {
+      console.error('Error:', error);
+      setAnalysisResult(`❌ Error: ${error.message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <div className="App">
+      <h1>HSE Compliance Checker</h1>
+      <div className="camera-container">
+        <video ref={videoRef} autoPlay playsInline muted></video>
+        <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+      </div>
+      <button onClick={handleCaptureAndAnalyze} disabled={isAnalyzing}>
+        {isAnalyzing? 'Analyzing...' : 'Capture and Analyze'}
+      </button>
+      <div className="result-box">
+        <pre>{analysisResult}</pre>
+      </div>
+    </div>
+  );
+}
+
+export default App;
       setIsModalOpen(false);
     }
   };
