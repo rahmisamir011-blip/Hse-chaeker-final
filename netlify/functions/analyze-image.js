@@ -61,16 +61,18 @@ exports.handler = async (event) => {
     }
 
     const base64Image = imageFile.content.toString("base64");
-    
+
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{
             parts: [
-              { text: "Analyze PPE compliance. Check: Hairnet, Mask, Protective suit, Gloves, Safety shoes. Return JSON: {findings:[{ppeItem:string,compliant:boolean,reason:string(Arabic),boundingBox:{x:0.1,y:0.1,width:0.2,height:0.2}}],summary:string(Arabic),overallCompliant:boolean}" },
+              {
+                text: "Analyze PPE compliance. Check: Hairnet, Mask, Protective suit, Gloves, Safety shoes. Return JSON: {findings:[{ppeItem:string,compliant:boolean,reason:string(Arabic),boundingBox:{x:0.1,y:0.1,width:0.2,height:0.2}}],summary:string(Arabic),overallCompliant:boolean}"
+              },
               { inline_data: { mime_type: imageFile.mimeType, data: base64Image } }
             ]
           }]
@@ -79,7 +81,7 @@ exports.handler = async (event) => {
     );
 
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.error && data.error.message ? data.error.message : "API error");
     }
@@ -90,7 +92,7 @@ exports.handler = async (event) => {
     } else {
       text = "{}";
     }
-    
+
     var codeMarker = "```
     if (text.indexOf(codeMarker) !== -1) {
       text = text.split(codeMarker + "json").join("").split(codeMarker).join("").trim();
