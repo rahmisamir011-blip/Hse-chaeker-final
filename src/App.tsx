@@ -143,6 +143,88 @@ export default App;
   // New function to send the image to YOUR secure backend
   const analyzeImage = async (file: File) => {
     const formData = new FormData();
+    formData.append('image', file);
+
+    setIsAnalyzing(true);
+    setAnalysisResult('Analyzing... Please wait.');
+
+    try {
+      // Call your own secure Netlify Function endpoint
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error |
+
+| `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Format and display the results
+      let resultText = '✅ Analysis Complete:\n\n';
+      resultText += `- Charlotte: ${data.charlotte? 'Detected' : 'Not Detected'}\n`;
+      resultText += `- Bavette: ${data.bavette? 'Detected' : 'Not Detected'}\n`;
+      resultText += `- Full Suit: ${data.suit? 'Detected' : 'Not Detected'}\n`;
+      
+      setAnalysisResult(resultText);
+
+    } catch (error: any) {
+      console.error('Error:', error);
+      setAnalysisResult(`❌ Error: ${error.message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <div className="App">
+      <h1>HSE Compliance Checker</h1>
+      <div className="camera-container">
+        <video ref={videoRef} autoPlay playsInline muted></video>
+        <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+      </div>
+      <button onClick={handleCaptureAndAnalyze} disabled={isAnalyzing}>
+        {isAnalyzing? 'Analyzing...' : 'Capture and Analyze'}
+      </button>
+      <div className="result-box">
+        <pre>{analysisResult}</pre>
+      </div>
+    </div>
+  );
+}
+
+export default App;
+    if (!videoRef.current ||!canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    if (!context) return;
+
+    // Set canvas size to match video stream
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw the current video frame onto the canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Convert canvas to a Blob, then to a File
+    canvas.toBlob(async (blob) => {
+      if (blob) {
+        const imageFile = new File([blob], "capture.jpeg", { type: "image/jpeg" });
+        await analyzeImage(imageFile);
+      }
+    }, 'image/jpeg');
+  };
+
+  // New function to send the image to YOUR secure backend
+  const analyzeImage = async (file: File) => {
+    const formData = new FormData();
     formData.append('image', file); // The key 'image' must match the backend function
 
     setIsAnalyzing(true);
