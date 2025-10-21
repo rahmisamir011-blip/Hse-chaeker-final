@@ -1,40 +1,155 @@
-// netlify/functions/analyze.js
-
 const { GoogleGenerativeAI } = require("@google/genai");
 const busboy = require('busboy');
 
-// This is a helper function to process the image file sent from the frontend.
+// Parse multipart form data
 function parseMultipartForm(event) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const fields = {};
     const bb = busboy({
       headers: {
-        'content-type': event.headers['content-type'] |
-
-| event.headers,
-      },
+        'content-type': event.headers['content-type'] || event.headers['Content-Type']
+      }
     });
 
     bb.on('file', (name, file, info) => {
       const { filename, mimeType } = info;
-      const chunks =;
+      const chunks = [];
+      
       file.on('data', (chunk) => {
         chunks.push(chunk);
       });
+      
       file.on('end', () => {
         fields[name] = {
           filename,
           mimeType,
-          content: Buffer.concat(chunks),
+          content: Buffer.concat(chunks)
         };
       });
+    });
+
+    bb.on('field', (name, val) => {
+      fields[name] = val;
     });
 
     bb.on('close', () => {
       resolve(fields);
     });
 
-    // Netlify sends the request body as a base64-encoded string.
+    bb.on('error', (err) => {
+      reject(new Error(`Error parsing form: ${err.message}`));
+    });
+
+    bb.end(Buffer.from(event.body, 'base64'));
+  });
+}
+
+// Main Netlify function handler
+exports.handler = async (event) => {
+  // CORS headers for all responses
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  };
+
+  // Handle preflight OPTIONS request
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
+
+  try {
+    // Get API key from environment
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY is not set in environment variables');
+    }
+
+    // Parse the incoming image
+    const parsedForm = await parseMultipartForm(event);
+    const imageFile = parsedForm.image;
+
+    if (!imageFile || !imageFile.content) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'No image file uploaded' })
+      };
+    }
+
+    // Initialize Gemini client
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+
+    // Prepare image data
+    const imagePart = {
+      inlineData: {
+        data: imageFile.content.toString('base64'),
+        mimeType: imageFile.mimeType
+      }
+    };
+
+    // Arabic HSE PPE detection prompt
+    const prompt = `أنت مفتش متخصص في الصحة والسلامة والبيئة (HSE) في مصانع الأدوية. 
+    مهمتك هي تحليل الصورة المقدمة للتحقق من امتثال العامل لمعدات الوقاية الشخصية (PPE).
+    
+    تحقق من وجود وارتداء العناصر التالية بشكل صحيح:
+    1. غطاء الشعر (Charlotte)
+    2. الكمامة (Bavette)
+    3. البذلة الواقية
+    4. القفازات
+    5. حذاء السلامة
+    
+    قدم النتائج بتنسيق JSON مع:
+    - findings: قائمة بكل عنصر PPE مع حالة الامتثال والسبب
+    - summary: ملخص عام بالعربية
+    - overallCompliant: true إذا كانت جميع العناصر موجودة، false خلاف ذلك
+    - recommendation: التوصية (يمكن الدخول / لا يمكن الدخول)`;
+
+    // Make API call
+    const result = await model.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    const analysisText = response.text();
+
+    // Try to parse as JSON, fallback to text response
+    let analysisJson;
+    try {
+      analysisJson = JSON.parse(analysisText);
+    } catch (parseError) {
+      analysisJson = {
+        rawResponse: analysisText,
+        overallCompliant: false,
+        summary: 'تعذر تحليل الاستجابة بشكل صحيح'
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify(analysisJson)
+    };
+
+  } catch (error) {
+    console.error('Error processing request:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: error.message,
+        timestamp: new Date().toISOString()
+      })
+    };
+  }
+};    // Netlify sends the request body as a base64-encoded string.
     // We need to convert it back to a buffer for busboy to process.
     bb.end(Buffer.from(event.body, 'base64'));
   });
