@@ -9,11 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.25.0",
-    "busboy": "^1.6.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
-  },
+  "@google/generative-ai": "^0.21.0",
+  "busboy": "^1.6.0"
+},
   "devDependencies": {
     "@netlify/functions": "^2.0.0",
     "@types/busboy": "^1.5.4",
