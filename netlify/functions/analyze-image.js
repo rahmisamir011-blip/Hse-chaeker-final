@@ -48,7 +48,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: "API key missing" }) };
     }
@@ -62,23 +62,34 @@ exports.handler = async (event) => {
 
     const base64Image = imageFile.content.toString("base64");
 
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        model: "gpt-4-vision",
+        messages: [
+          {
+            role: "user",
+            content: [
               {
-                text: "Analyze PPE. Check: Hairnet, Mask, Suit, Gloves, Shoes. Return JSON."
+                type: "text",
+                text: "Analyze PPE in this image. Check: Hairnet, Mask, Protective suit, Gloves, Safety shoes. Return only valid JSON: {findings:[{ppeItem:string,compliant:boolean,reason:string}],summary:string,overallCompliant:boolean}"
               },
-              { inline_data: { mime_type: imageFile.mimeType, data: base64Image } }
+              {
+                type: "image_url",
+                image_url: {
+                  url: "data:" + imageFile.mimeType + ";base64," + base64Image
+                }
+              }
             ]
-          }]
-        })
-      }
-    );
+          }
+        ],
+        max_tokens: 500
+      })
+    });
 
     const data = await response.json();
 
@@ -86,13 +97,8 @@ exports.handler = async (event) => {
       throw new Error(data.error && data.error.message ? data.error.message : "API error");
     }
 
-    let text = "";
-    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
-      text = data.candidates[0].content.parts[0].text;
-    } else {
-      text = "{}";
-    }
-
+    let text = data.choices[0].message.content;
+    
     if (text.indexOf("```
       text = text.replace(/```json/g, "").replace(/```
     }
