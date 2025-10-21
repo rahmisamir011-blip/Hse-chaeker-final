@@ -1,7 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/genai");
 const busboy = require('busboy');
 
-// Parse multipart form data
 function parseMultipartForm(event) {
   return new Promise((resolve, reject) => {
     const fields = {};
@@ -44,9 +43,7 @@ function parseMultipartForm(event) {
   });
 }
 
-// Main Netlify function handler
 exports.handler = async (event) => {
-  // CORS headers for all responses
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -54,7 +51,6 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json'
   };
 
-  // Handle preflight OPTIONS request
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
@@ -68,13 +64,11 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Get API key from environment
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not set in environment variables');
     }
 
-    // Parse the incoming image
     const parsedForm = await parseMultipartForm(event);
     const imageFile = parsedForm.image;
 
@@ -86,11 +80,9 @@ exports.handler = async (event) => {
       };
     }
 
-    // Initialize Gemini client
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 
-    // Prepare image data
     const imagePart = {
       inlineData: {
         data: imageFile.content.toString('base64'),
@@ -98,7 +90,6 @@ exports.handler = async (event) => {
       }
     };
 
-    // Arabic HSE PPE detection prompt
     const prompt = `أنت مفتش متخصص في الصحة والسلامة والبيئة (HSE) في مصانع الأدوية. 
     مهمتك هي تحليل الصورة المقدمة للتحقق من امتثال العامل لمعدات الوقاية الشخصية (PPE).
     
@@ -110,22 +101,20 @@ exports.handler = async (event) => {
     5. حذاء السلامة
     
     قدم النتائج بتنسيق JSON مع:
-    - findings: قائمة بكل عنصر PPE مع حالة الامتثال والسبب
+    - findings: قائمة بكل عنصر PPE مع حالة الامتثال والسبب وإحداثيات bounding box (نسبية 0-1)
     - summary: ملخص عام بالعربية
-    - overallCompliant: true إذا كانت جميع العناصر موجودة، false خلاف ذلك
-    - recommendation: التوصية (يمكن الدخول / لا يمكن الدخول)`;
+    - overallCompliant: true إذا كانت جميع العناصر موجودة، false خلاف ذلك`;
 
-    // Make API call
     const result = await model.generateContent([prompt, imagePart]);
     const response = await result.response;
     const analysisText = response.text();
 
-    // Try to parse as JSON, fallback to text response
     let analysisJson;
     try {
       analysisJson = JSON.parse(analysisText);
     } catch (parseError) {
       analysisJson = {
+        findings: [],
         rawResponse: analysisText,
         overallCompliant: false,
         summary: 'تعذر تحليل الاستجابة بشكل صحيح'
@@ -149,4 +138,4 @@ exports.handler = async (event) => {
       })
     };
   }
-};    // Netlify sends the request body as a base64-encoded string.
+};
