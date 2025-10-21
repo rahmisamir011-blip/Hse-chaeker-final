@@ -67,15 +67,12 @@ exports.handler = async (event) => {
     const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
-      console.error('GEMINI_API_KEY not found in environment');
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'API key not configured' })
+        body: JSON.stringify({ error: 'GEMINI_API_KEY not configured in Netlify environment' })
       };
     }
-
-    console.log('API Key found, length:', apiKey.length);
 
     const parsedForm = await parseMultipartForm(event);
     const imageFile = parsedForm.image;
@@ -88,73 +85,41 @@ exports.handler = async (event) => {
       };
     }
 
-    console.log('Image received:', imageFile.filename, 'Type:', imageFile.mimeType);
-
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    const prompt = `You are an HSE inspector specialized in pharmaceutical manufacturing. Analyze this image and check PPE compliance.
+    const prompt = `Analyze PPE compliance. Check: Hairnet, Mask, Protective suit, Gloves, Safety shoes.
 
-Check for these items worn correctly:
-1. Hairnet (Charlotte) - غطاء الشعر
-2. Face Mask (Bavette) - الكمامة  
-3. Protective Suit - البذلة الواقية
-4. Gloves - القفازات
-5. Safety Shoes - حذاء السلامة
-
-Return JSON in this exact format:
+Return JSON:
 {
-  "findings": [
-    {
-      "ppeItem": "Hairnet",
-      "compliant": true,
-      "reason": "السبب بالعربية",
-      "boundingBox": {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.2}
-    }
-  ],
-  "summary": "ملخص عام بالعربية",
+  "findings": [{"ppeItem": "Hairnet", "compliant": true, "reason": "السبب", "boundingBox": {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.2}}],
+  "summary": "ملخص",
   "overallCompliant": true
-}
+}`;
 
-Use these exact values for ppeItem: "Hairnet", "Mask", "Protective suit", "Gloves", "Safety shoes"`;
-
-    const imagePart = {
-      inlineData: {
-        data: imageFile.content.toString('base64'),
-        mimeType: imageFile.mimeType
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: imageFile.content.toString('base64'),
+          mimeType: imageFile.mimeType
+        }
       }
-    };
+    ]);
 
-    console.log('Calling Gemini API...');
-    const result = await model.generateContent([prompt, imagePart]);
-    const response = result.response;
-    const text = response.text();
+    const text = result.response.text();
+    const cleanText = text.replace(/``````
+?/g, '').trim();
     
-    console.log('Gemini response received, length:', text.length);
-
     let analysisJson;
     try {
-      const cleanText = text.replace(/``````
-?/g, '').trim();
       analysisJson = JSON.parse(cleanText);
-      
-      if (!analysisJson.findings || !Array.isArray(analysisJson.findings)) {
-        analysisJson.findings = [];
-      }
-      
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
+      if (!analysisJson.findings) analysisJson.findings = [];
+    } catch (e) {
       analysisJson = {
-        findings: [
-          {
-            ppeItem: "Hairnet",
-            compliant: false,
-            reason: "تعذر تحليل الصورة",
-            boundingBox: { x: 0, y: 0, width: 1, height: 1 }
-          }
-        ],
-        overallCompliant: false,
-        summary: 'تعذر تحليل الاستجابة. يرجى المحاولة مرة أخرى.'
+        findings: [{ppeItem: "Hairnet", compliant: false, reason: "تعذر التحليل", boundingBox: {x:0, y:0, width:1, height:1}}],
+        summary: "حدث خطأ في التحليل",
+        overallCompliant: false
       };
     }
 
@@ -165,15 +130,12 @@ Use these exact values for ppeItem: "Hairnet", "Mask", "Protective suit", "Glove
     };
 
   } catch (error) {
-    console.error('Function error:', error);
-    console.error('Error stack:', error.stack);
-    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: error.message || 'Internal server error',
-        type: error.constructor.name,
+        error: error.message,
+        stack: error.stack,
         timestamp: new Date().toISOString()
       })
     };
