@@ -70,6 +70,118 @@ exports.handler = async (event) => {
       return {
         statusCode: 500,
         headers,
+        body: JSON.stringify({ error: 'GEMINI_API_KEY not configured' })
+      };
+    }
+
+    const parsedForm = await parseMultipartForm(event);
+    const imageFile = parsedForm.image;
+
+    if (!imageFile || !imageFile.content) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'No image file uploaded' })
+      };
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const prompt = "Analyze PPE compliance. Check: Hairnet, Mask, Protective suit, Gloves, Safety shoes. Return JSON: {findings: [{ppeItem: string, compliant: boolean, reason: string (Arabic), boundingBox: {x, y, width, height}}], summary: string (Arabic), overallCompliant: boolean}";
+
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: imageFile.content.toString('base64'),
+          mimeType: imageFile.mimeType
+        }
+      }
+    ]);
+
+    const text = result.response.text();
+    
+    // Fixed regex - properly escaped
+    let cleanText = text;
+    if (text.includes('```
+      cleanText = text.replace(/```json/g, '').replace(/```
+    }
+    
+    let analysisJson;
+    try {
+      analysisJson = JSON.parse(cleanText);
+      if (!analysisJson.findings) {
+        analysisJson.findings = [];
+      }
+    } catch (parseError) {
+      analysisJson = {
+        findings: [
+          {
+            ppeItem: "Hairnet",
+            compliant: false,
+            reason: "تعذر تحليل الصورة",
+            boundingBox: { x: 0, y: 0, width: 1, height: 1 }
+          }
+        ],
+        summary: "حدث خطأ في تحليل النتيجة",
+        overallCompliant: false
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify(analysisJson)
+    };
+
+  } catch (error) {
+    console.error('Function error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        error: error.message || 'Internal server error',
+        timestamp: new Date().toISOString()
+      })
+    };
+  }
+};
+    bb.on('error', (err) => {
+      reject(new Error(`Error parsing form: ${err.message}`));
+    });
+
+    bb.end(Buffer.from(event.body, 'base64'));
+  });
+}
+
+exports.handler = async (event) => {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  };
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
+
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      return {
+        statusCode: 500,
+        headers,
         body: JSON.stringify({ error: 'GEMINI_API_KEY not configured in Netlify environment' })
       };
     }
