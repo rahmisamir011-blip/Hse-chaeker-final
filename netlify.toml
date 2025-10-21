@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "npm install && npm run build"
   publish = "dist"
   functions = "netlify/functions"
 
@@ -7,3 +7,4 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
