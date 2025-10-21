@@ -63,7 +63,7 @@ exports.handler = async (event) => {
     const base64Image = imageFile.content.toString("base64");
     
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,12 +81,19 @@ exports.handler = async (event) => {
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.error?.message || "API error");
+      throw new Error(data.error && data.error.message ? data.error.message : "API error");
     }
 
-    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    if (text.includes("```
-      text = text.replace(/```json/g, "").replace(/```
+    let text = "";
+    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+      text = data.candidates[0].content.parts[0].text;
+    } else {
+      text = "{}";
+    }
+    
+    var codeMarker = "```
+    if (text.indexOf(codeMarker) !== -1) {
+      text = text.split(codeMarker + "json").join("").split(codeMarker).join("").trim();
     }
 
     let result;
